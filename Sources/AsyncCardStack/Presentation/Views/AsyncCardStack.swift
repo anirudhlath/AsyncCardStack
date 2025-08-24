@@ -95,10 +95,6 @@ public struct AsyncCardStack<Element: CardElement, Direction: SwipeDirection, Da
       }
     )
     .zIndex(Double(viewModel.state.visibleCards.count - index))
-    .transition(.asymmetric(
-      insertion: .opacity.combined(with: .scale(scale: 0.8)),
-      removal: .opacity.combined(with: .move(edge: .leading))
-    ))
   }
   
   private var emptyStateView: some View {

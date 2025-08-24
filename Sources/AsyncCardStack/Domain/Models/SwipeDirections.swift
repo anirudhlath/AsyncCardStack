@@ -26,27 +26,13 @@ public enum LeftRight: String, SwipeDirection, CaseIterable {
   case right
   
   public static func from(angle: Angle) -> Self? {
-    let normalized = angle.normalized.radians
-    
-    // Define dead zones for up/down (around 90° and 270°)
-    let deadZone: Double = .pi / 8  // 22.5 degrees
-    
-    // Up zone: 90° ± deadZone
-    if abs(normalized - .pi / 2) < deadZone {
-      return nil  // Up
+    // Match the legacy CardStack implementation exactly
+    switch angle.normalized.radians {
+    case 3 * .pi / 4 ..< 5 * .pi / 4:   return .left
+    case 0 ..< .pi / 4:                 return .right
+    case 7 * .pi / 4 ..< 2 * .pi:       return .right
+    default:                            return nil
     }
-    // Down zone: 270° ± deadZone
-    if abs(normalized - 3 * .pi / 2) < deadZone {
-      return nil  // Down
-    }
-    
-    // Left: roughly 135° to 225°
-    if normalized > .pi / 2 + deadZone && normalized < 3 * .pi / 2 - deadZone {
-      return .left
-    }
-    
-    // Right: everything else
-    return .right
   }
   
   public var angle: Angle {

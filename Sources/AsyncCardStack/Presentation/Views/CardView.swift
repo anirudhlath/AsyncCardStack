@@ -60,18 +60,16 @@ struct CardView<Element: CardElement, Direction: SwipeDirection, Content: View>:
         .disabled(translation != .zero)
         .offset(combinedOffset)
         .rotationEffect(rotation(geometry))
-        .scaleEffect(cardScale)
+        .scaleEffect(cardScale, anchor: .bottom)  // Match legacy: scale from bottom
         .opacity(cardOpacity)
+        .simultaneousGesture(isOnTop ? dragGesture(geometry) : nil)
         .animation(
-          draggingState == .dragging ? .easeInOut(duration: 0.05) : .easeInOut(duration: configuration.animationDuration),
+          draggingState == .dragging ? .easeInOut(duration: 0.05) : .default,
           value: translation
         )
-        .simultaneousGesture(isOnTop ? dragGesture(geometry) : nil)
-        .onChange(of: translation) { newValue in
-          if newValue != .zero {
-            draggingState = .dragging
-          } else if draggingState == .dragging {
-            draggingState = .ended
+        .onChange(of: isDragging) { newValue in
+          if !newValue && draggingState == .dragging {
+            cancelDragging()
           }
         }
     }
@@ -120,28 +118,26 @@ struct CardView<Element: CardElement, Direction: SwipeDirection, Content: View>:
   
   private func dragGesture(_ geometry: GeometryProxy) -> some Gesture {
     DragGesture()
-      .updating($isDragging) { _, state, _ in
+      .updating($isDragging) { value, state, transaction in
         state = true
       }
       .onChanged { value in
-        draggingState = .dragging
-        translation = value.translation
-        // Notify about ongoing direction change
-        if let direction = ongoingSwipeDirection(geometry) {
-          onChange?(direction)
+        self.draggingState = .dragging
+        self.translation = value.translation
+        if let ongoingDirection = ongoingSwipeDirection(geometry) {
+          onChange?(ongoingDirection)
         } else {
           onChange?(nil)
         }
       }
       .onEnded { value in
-        draggingState = .ended
-        
+        self.draggingState = .ended
         if let direction = ongoingSwipeDirection(geometry) {
-          Task {
-            await onSwipe(direction)
-          }
-          withAnimation(.easeInOut(duration: configuration.animationDuration)) {
+          withAnimation(.default) {
             translation = .zero
+            Task {
+              await onSwipe(direction)
+            }
           }
         } else {
           cancelDragging()
@@ -150,9 +146,7 @@ struct CardView<Element: CardElement, Direction: SwipeDirection, Content: View>:
   }
   
   private func cancelDragging() {
-    withAnimation(.easeInOut(duration: configuration.animationDuration)) {
-      draggingState = .idle
-      translation = .zero
-    }
+    draggingState = .idle
+    translation = .zero
   }
 }
