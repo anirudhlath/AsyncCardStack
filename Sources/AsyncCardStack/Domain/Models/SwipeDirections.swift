@@ -13,11 +13,8 @@ import SwiftUI
 public extension Angle {
   /// Normalize angle to 0...2π range
   var normalized: Angle {
-    let radians = self.radians
-    if radians < 0 {
-      return .radians(radians + 2 * .pi)
-    }
-    return self
+    let radians = self.radians.truncatingRemainder(dividingBy: 2 * .pi)
+    return .radians(radians < 0 ? radians + 2 * .pi : radians)
   }
 }
 
@@ -29,16 +26,27 @@ public enum LeftRight: String, SwipeDirection, CaseIterable {
   case right
   
   public static func from(angle: Angle) -> Self? {
-    switch angle.normalized.radians {
-    case 3 * .pi / 4 ..< 5 * .pi / 4:
-      return .left
-    case 0 ..< .pi / 4:
-      return .right
-    case 7 * .pi / 4 ..< 2 * .pi:
-      return .right
-    default:
-      return nil
+    let normalized = angle.normalized.radians
+    
+    // Define dead zones for up/down (around 90° and 270°)
+    let deadZone: Double = .pi / 8  // 22.5 degrees
+    
+    // Up zone: 90° ± deadZone
+    if abs(normalized - .pi / 2) < deadZone {
+      return nil  // Up
     }
+    // Down zone: 270° ± deadZone
+    if abs(normalized - 3 * .pi / 2) < deadZone {
+      return nil  // Down
+    }
+    
+    // Left: roughly 135° to 225°
+    if normalized > .pi / 2 + deadZone && normalized < 3 * .pi / 2 - deadZone {
+      return .left
+    }
+    
+    // Right: everything else
+    return .right
   }
   
   public var angle: Angle {
@@ -59,15 +67,20 @@ public enum FourDirections: String, SwipeDirection, CaseIterable {
   case left
   
   public static func from(angle: Angle) -> Self? {
-    switch angle.normalized.radians {
+    let normalized = angle.normalized.radians
+    
+    // Use inclusive ranges for boundaries
+    switch normalized {
     case .pi / 4 ..< 3 * .pi / 4:
       return .top
-    case 3 * .pi / 4 ..< 5 * .pi / 4:
+    case 3 * .pi / 4 ... 5 * .pi / 4:  // Include 5π/4 (225°)
       return .left
-    case 5 * .pi / 4 ..< 7 * .pi / 4:
+    case (5 * .pi / 4).nextUp ..< 7 * .pi / 4:
       return .bottom
-    default:
+    case 0 ..< .pi / 4, 7 * .pi / 4 ..< 2 * .pi:
       return .right
+    default:
+      return .right  // Catch any edge cases
     }
   }
   
