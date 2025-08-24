@@ -2,7 +2,7 @@
 //  CardStackViewModel.swift
 //  AsyncCardStack
 //
-//  Created by Software Architect on 2025-08-23.
+//  Created by Anirudh Lath on 2025-08-23.
 //
 
 import Foundation
@@ -18,24 +18,26 @@ public final class CardStackViewModel<Element: CardElement, Direction: SwipeDire
   
   private let dataSource: DataSource
   private let configuration: CardStackConfiguration
+  private let undoConfiguration: UndoConfiguration<Element, Direction>?
   
   // Async stream handling
   private var updateTask: Task<Void, Never>?
   private var loadMoreTask: Task<Void, Never>?
   
-  // Callbacks
-  public var onSwipe: ((Element, Direction) async -> Bool)?
-  public var onUndo: ((Element) async -> Bool)?
-  
   // MARK: - Initialization
   
   public init(
     dataSource: DataSource,
-    configuration: CardStackConfiguration = .default
+    configuration: CardStackConfiguration = .default,
+    undoConfiguration: UndoConfiguration<Element, Direction>? = nil
   ) {
     self.dataSource = dataSource
     self.configuration = configuration
-    self.state = CardStackState(configuration: configuration)
+    self.undoConfiguration = undoConfiguration
+    self.state = CardStackState(
+      configuration: configuration,
+      undoConfiguration: undoConfiguration
+    )
   }
   
   deinit {
@@ -53,10 +55,13 @@ public final class CardStackViewModel<Element: CardElement, Direction: SwipeDire
       guard let self = self else { return }
       
       do {
+        // Restore tombstones if configured
+        await state.restoreTombstones()
+        
         // Load initial cards
         state.setLoading(true)
         let initialCards = try await dataSource.loadInitialCards()
-        state.setCards(initialCards)
+        await state.setCards(initialCards)
         state.setLoading(false)
         
         // Listen to updates
@@ -80,7 +85,8 @@ public final class CardStackViewModel<Element: CardElement, Direction: SwipeDire
   
   /// Swipe a card in the given direction
   public func swipe(direction: Direction) async {
-    guard let card = state.swipe(direction: direction) else { return }
+    // Use the new async swipe method
+    guard let card = await state.swipe(direction: direction) else { return }
     
     // Check if we should load more cards
     if state.shouldPreloadMore {
@@ -89,47 +95,24 @@ public final class CardStackViewModel<Element: CardElement, Direction: SwipeDire
     
     // Report swipe to data source
     do {
-      // Call custom swipe handler if provided
-      if let onSwipe = onSwipe {
-        let shouldProceed = await onSwipe(card, direction)
-        if !shouldProceed {
-          // Undo the swipe if handler returns false
-          _ = state.undo()
-          return
-        }
-      }
-      
       try await dataSource.reportSwipe(card: card, direction: direction)
     } catch {
       // If reporting fails, optionally undo the swipe
-      _ = state.undo()
+      _ = await state.undo()
       state.setError(error)
     }
   }
   
   /// Undo the last swipe
   public func undo() async {
-    guard let card = state.undo() else { return }
+    // Use the new async undo method with validation
+    guard let card = await state.undo() else { return }
     
     do {
-      // Call custom undo handler if provided
-      if let onUndo = onUndo {
-        let shouldProceed = await onUndo(card)
-        if !shouldProceed {
-          // Re-swipe if handler returns false
-          if let lastAction = state.swipeHistory.last {
-            _ = state.swipe(direction: lastAction.direction)
-          }
-          return
-        }
-      }
-      
       try await dataSource.reportUndo(card: card)
     } catch {
-      // If reporting fails, re-apply the swipe
-      if let lastAction = state.swipeHistory.last {
-        _ = state.swipe(direction: lastAction.direction)
-      }
+      // If reporting fails, we can't re-apply since state already changed
+      // Just log the error
       state.setError(error)
     }
   }
@@ -144,19 +127,19 @@ public final class CardStackViewModel<Element: CardElement, Direction: SwipeDire
   private func handleUpdate(_ update: CardUpdate<Element>) async {
     switch update {
     case .initial(let cards):
-      state.setCards(cards)
+      await state.setCards(cards)
       
     case .append(let cards):
       state.appendCards(cards)
       
     case .replace(let cards):
-      state.setCards(cards)
+      await state.setCards(cards)
       
     case .remove(let ids):
       state.removeCards(ids: ids)
       
     case .clear:
-      state.clearCards()
+      await state.clearCards()
       
     case .update(let card):
       state.updateCard(card)
@@ -193,18 +176,28 @@ extension CardStackViewModel {
   /// Initialize with a static array of cards
   public convenience init(
     cards: [Element],
-    configuration: CardStackConfiguration = .default
+    configuration: CardStackConfiguration = .default,
+    undoConfiguration: UndoConfiguration<Element, Direction>? = nil
   ) where DataSource == StaticCardDataSource<Element> {
     let dataSource = StaticCardDataSource(cards: cards)
-    self.init(dataSource: dataSource, configuration: configuration)
+    self.init(
+      dataSource: dataSource,
+      configuration: configuration,
+      undoConfiguration: undoConfiguration
+    )
   }
   
   /// Initialize with an async sequence of cards
   public convenience init<S: AsyncSequence>(
     cardSequence: S,
-    configuration: CardStackConfiguration = .default
+    configuration: CardStackConfiguration = .default,
+    undoConfiguration: UndoConfiguration<Element, Direction>? = nil
   ) where DataSource == AsyncSequenceDataSource<Element, S>, S.Element == [Element] {
     let dataSource = AsyncSequenceDataSource(sequence: cardSequence)
-    self.init(dataSource: dataSource, configuration: configuration)
+    self.init(
+      dataSource: dataSource,
+      configuration: configuration,
+      undoConfiguration: undoConfiguration
+    )
   }
 }

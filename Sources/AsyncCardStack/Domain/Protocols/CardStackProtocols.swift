@@ -2,7 +2,7 @@
 //  CardStackProtocols.swift
 //  AsyncCardStack
 //
-//  Created by Software Architect on 2025-08-23.
+//  Created by Anirudh Lath on 2025-08-23.
 //
 
 import Foundation
@@ -11,8 +11,7 @@ import SwiftUI
 // MARK: - Core Protocols
 
 /// Protocol for card elements that can be displayed in the stack
-public protocol CardElement: Identifiable, Equatable, Sendable {
-  associatedtype ID: Hashable & Sendable
+public protocol CardElement: Identifiable, Equatable, Sendable where ID: Hashable & Sendable {
 }
 
 /// Protocol for defining swipe directions

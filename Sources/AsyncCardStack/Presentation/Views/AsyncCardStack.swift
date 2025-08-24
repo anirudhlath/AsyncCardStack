@@ -2,7 +2,7 @@
 //  AsyncCardStack.swift
 //  AsyncCardStack
 //
-//  Created by Software Architect on 2025-08-23.
+//  Created by Anirudh Lath on 2025-08-23.
 //
 
 import SwiftUI
@@ -50,7 +50,7 @@ public struct AsyncCardStack<Element: CardElement, Direction: SwipeDirection, Da
     .onDisappear {
       viewModel.stopListening()
     }
-    .onChange(of: ongoingDirection) { _, newValue in
+    .onChange(of: ongoingDirection) { newValue in
       onChange?(newValue)
     }
   }
@@ -114,11 +114,8 @@ public struct AsyncCardStack<Element: CardElement, Direction: SwipeDirection, Da
   // MARK: - Helper Methods
   
   private func getSwipeDirection(for card: Element) -> Direction? {
-    guard let index = viewModel.state.cards.firstIndex(where: { $0.id == card.id }),
-          index < viewModel.state.cardData.count else {
-      return nil
-    }
-    return viewModel.state.cardData[index].swipeDirection
+    // Swipe direction is tracked internally in CardView during drag
+    return nil
   }
   
   private func offset(for direction: Direction?, in geometry: GeometryProxy) -> CGSize {
@@ -155,14 +152,15 @@ extension AsyncCardStack {
   public init(
     cards: [Element],
     configuration: CardStackConfiguration = .default,
+    undoConfiguration: UndoConfiguration<Element, Direction>? = nil,
     onChange: ((Direction?) -> Void)? = nil,
-    onSwipe: ((Element, Direction) async -> Bool)? = nil,
-    onUndo: ((Element) async -> Bool)? = nil,
     @ViewBuilder content: @escaping (Element, Direction?) -> Content
   ) where DataSource == StaticCardDataSource<Element> {
-    let viewModel = CardStackViewModel(cards: cards, configuration: configuration)
-    viewModel.onSwipe = onSwipe
-    viewModel.onUndo = onUndo
+    let viewModel = CardStackViewModel(
+      cards: cards,
+      configuration: configuration,
+      undoConfiguration: undoConfiguration
+    )
     
     self.init(
       viewModel: viewModel,
@@ -176,22 +174,28 @@ extension AsyncCardStack {
   public init(
     stream: AsyncStream<CardUpdate<Element>>,
     configuration: CardStackConfiguration = .default,
+    undoConfiguration: UndoConfiguration<Element, Direction>? = nil,
     onChange: ((Direction?) -> Void)? = nil,
-    onSwipe: ((Element, Direction) async throws -> Void)? = nil,
-    onUndo: ((Element) async throws -> Void)? = nil,
-    onLoadMore: (() async throws -> [Element])? = nil,
+    onSwipe: (@Sendable (Element, Direction) async throws -> Void)? = nil,
+    onUndo: (@Sendable (Element) async throws -> Void)? = nil,
+    onLoadMore: (@Sendable () async throws -> [Element])? = nil,
     @ViewBuilder content: @escaping (Element, Direction?) -> Content
   ) where DataSource == AsyncStreamDataSource<Element> {
     let dataSource = AsyncStreamDataSource(
       stream: stream,
-      onSwipe: onSwipe,
+      onSwipe: onSwipe != nil ? { @Sendable element, direction in
+        if let dir = direction as? Direction, let swipeHandler = onSwipe {
+          try await swipeHandler(element, dir)
+        }
+      } : nil,
       onUndo: onUndo,
       onLoadMore: onLoadMore
     )
     
     let viewModel = CardStackViewModel(
       dataSource: dataSource,
-      configuration: configuration
+      configuration: configuration,
+      undoConfiguration: undoConfiguration
     )
     
     self.init(

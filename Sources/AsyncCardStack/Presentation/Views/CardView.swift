@@ -2,7 +2,7 @@
 //  CardView.swift
 //  AsyncCardStack
 //
-//  Created by Software Architect on 2025-08-23.
+//  Created by Anirudh Lath on 2025-08-23.
 //
 
 import SwiftUI
@@ -48,9 +48,11 @@ struct CardView<Element: CardElement, Direction: SwipeDirection, Content: View>:
           value: translation
         )
         .simultaneousGesture(isOnTop ? dragGesture(geometry) : nil)
-        .onChange(of: isDragging) { _, newValue in
-          if !newValue && draggingState == .dragging {
-            cancelDragging()
+        .onChange(of: translation) { newValue in
+          if newValue != .zero {
+            draggingState = .dragging
+          } else if draggingState == .dragging {
+            draggingState = .ended
           }
         }
     }

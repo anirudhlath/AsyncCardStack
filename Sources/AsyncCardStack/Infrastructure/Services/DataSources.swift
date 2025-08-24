@@ -2,7 +2,7 @@
 //  DataSources.swift
 //  AsyncCardStack
 //
-//  Created by Software Architect on 2025-08-23.
+//  Created by Anirudh Lath on 2025-08-23.
 //
 
 import Foundation
@@ -10,7 +10,7 @@ import Foundation
 // MARK: - Static Data Source
 
 /// A data source that provides a static array of cards
-public final class StaticCardDataSource<Element: CardElement>: CardDataSource {
+public final class StaticCardDataSource<Element: CardElement>: CardDataSource, @unchecked Sendable {
   private let cards: [Element]
   private var hasLoadedInitial = false
   
@@ -50,7 +50,7 @@ public final class StaticCardDataSource<Element: CardElement>: CardDataSource {
 // MARK: - AsyncSequence Data Source
 
 /// A data source that wraps an AsyncSequence
-public final class AsyncSequenceDataSource<Element: CardElement, S: AsyncSequence>: CardDataSource where S.Element == [Element] {
+public final class AsyncSequenceDataSource<Element: CardElement, S: AsyncSequence & Sendable>: CardDataSource, @unchecked Sendable where S.Element == [Element] {
   private let sequence: S
   private var iterator: S.AsyncIterator?
   private var continuation: AsyncStream<CardUpdate<Element>>.Continuation?
@@ -119,15 +119,15 @@ public final class AsyncSequenceDataSource<Element: CardElement, S: AsyncSequenc
 /// A data source that bridges an AsyncStream directly
 public final class AsyncStreamDataSource<Element: CardElement>: CardDataSource {
   private let stream: AsyncStream<CardUpdate<Element>>
-  private let swipeHandler: ((Element, any SwipeDirection) async throws -> Void)?
-  private let undoHandler: ((Element) async throws -> Void)?
-  private let loadMoreHandler: (() async throws -> [Element])?
+  private let swipeHandler: (@Sendable (Element, any SwipeDirection) async throws -> Void)?
+  private let undoHandler: (@Sendable (Element) async throws -> Void)?
+  private let loadMoreHandler: (@Sendable () async throws -> [Element])?
   
   public init(
     stream: AsyncStream<CardUpdate<Element>>,
-    onSwipe: ((Element, any SwipeDirection) async throws -> Void)? = nil,
-    onUndo: ((Element) async throws -> Void)? = nil,
-    onLoadMore: (() async throws -> [Element])? = nil
+    onSwipe: (@Sendable (Element, any SwipeDirection) async throws -> Void)? = nil,
+    onUndo: (@Sendable (Element) async throws -> Void)? = nil,
+    onLoadMore: (@Sendable () async throws -> [Element])? = nil
   ) {
     self.stream = stream
     self.swipeHandler = onSwipe
@@ -169,7 +169,7 @@ public final class AsyncStreamDataSource<Element: CardElement>: CardDataSource {
 // MARK: - Continuation-based Data Source
 
 /// A data source that uses AsyncStream.Continuation for manual control
-public final class ContinuationDataSource<Element: CardElement>: CardDataSource {
+public final class ContinuationDataSource<Element: CardElement>: CardDataSource, @unchecked Sendable {
   private var continuation: AsyncStream<CardUpdate<Element>>.Continuation?
   private let stream: AsyncStream<CardUpdate<Element>>
   

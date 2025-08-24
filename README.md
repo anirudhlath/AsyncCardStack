@@ -4,12 +4,13 @@ A modern, flexible SwiftUI card stack library built with Swift concurrency (asyn
 
 ## Features
 
-- ✨ **Swift Concurrency**: Built entirely with async/await, AsyncStream, and continuations
+- ✨ **Swift Concurrency**: Built entirely with async/await, AsyncStream, and continuations (no Combine)
 - 🏗️ **Clean Architecture**: Follows SOLID principles with clear separation of concerns
 - 🔄 **Reactive Updates**: Automatically updates when data source changes
 - 🎯 **Type-Safe**: Generic implementation with strong type safety
 - 🎨 **Customizable**: Flexible configuration and appearance options
-- ↩️ **Undo Support**: Built-in undo functionality for swipe actions
+- ↩️ **Advanced Undo**: Sophisticated undo with tombstone pattern and immutable ID tracking
+- 💾 **Persistence**: Optional local persistence of undo history across app restarts
 - 📱 **Platform Support**: iOS 15+, macOS 12+, tvOS 15+, watchOS 8+
 
 ## Installation
@@ -82,9 +83,17 @@ dataSource.appendCards(moreCards)
 dataSource.replaceCards(filteredCards)
 ```
 
-### Firebase Integration Example
+### Complete Firebase Integration with Persistence
 
 ```swift
+// 1. Define your card model
+struct MyCard: CardElement, Codable {
+    let id: String
+    let title: String
+    let imageURL: String
+}
+
+// 2. Create Firebase data source
 class FirebaseCardDataSource: CardDataSource {
     typealias Element = MyCard
     
@@ -113,7 +122,6 @@ class FirebaseCardDataSource: CardDataSource {
     }
     
     func loadInitialCards() async throws -> [MyCard] {
-        // Load initial cards from Firestore
         let snapshot = try await Firestore.firestore()
             .collection("cards")
             .getDocuments()
@@ -124,7 +132,7 @@ class FirebaseCardDataSource: CardDataSource {
     }
     
     func reportSwipe(card: MyCard, direction: any SwipeDirection) async throws {
-        // Report swipe to backend
+        // Report swipe but DON'T delete yet (undo window)
         try await Firestore.firestore()
             .collection("swipes")
             .addDocument(data: [
@@ -135,15 +143,75 @@ class FirebaseCardDataSource: CardDataSource {
     }
     
     func reportUndo(card: MyCard) async throws {
-        // Handle undo logic
+        // Remove the swipe record
+        let swipes = try await Firestore.firestore()
+            .collection("swipes")
+            .whereField("cardId", isEqualTo: card.id)
+            .getDocuments()
+        
+        for doc in swipes.documents {
+            try await doc.reference.delete()
+        }
     }
     
     func loadMoreCards() async throws -> [MyCard] {
-        // Load more cards if needed
+        // Implement pagination if needed
         return []
     }
 }
+
+// 3. Configure undo with persistence
+let undoConfig = UndoConfiguration<MyCard, LeftRight>(
+    limit: 5,
+    replacementStrategy: .clearTombstones,
+    restoreOnLaunch: .clearGracefully,  // Ensures cleanup on restart
+    persistenceKey: "Reler.UndoHistory",
+    onEviction: { card, direction in
+        // Delete from Firebase when card exits undo window
+        try await Firestore.firestore()
+            .collection("cards")
+            .document(card.id)
+            .delete()
+    }
+)
+
+// 4. Create view model
+let dataSource = FirebaseCardDataSource()
+let viewModel = CardStackViewModel(
+    dataSource: dataSource,
+    undoConfiguration: undoConfig
+)
+
+// 5. Use in your view
+struct ContentView: View {
+    @StateObject private var viewModel: CardStackViewModel<MyCard, LeftRight, FirebaseCardDataSource>
+    
+    var body: some View {
+        AsyncCardStack(viewModel: viewModel) { card, direction in
+            CardContentView(card: card)
+                .overlay(alignment: .topLeading) {
+                    if let direction = direction {
+                        DirectionLabel(direction: direction)
+                    }
+                }
+        }
+        .overlay(alignment: .bottom) {
+            Button("Undo") {
+                Task {
+                    await viewModel.undo()
+                }
+            }
+            .disabled(!viewModel.canUndo)
+        }
+    }
+}
 ```
+
+This setup ensures:
+- ✅ Cards can be undone within the configured limit
+- ✅ Cards are deleted from Firebase only after exiting undo window
+- ✅ If app crashes, tombstones are restored and properly cleaned up on restart
+- ✅ Filter changes are handled gracefully with configurable strategies
 
 ### Custom Swipe Directions
 
@@ -169,6 +237,42 @@ enum CustomDirection: String, SwipeDirection, CaseIterable {
 }
 ```
 
+### Undo Configuration
+
+The library provides advanced undo functionality with persistence support:
+
+```swift
+let undoConfig = UndoConfiguration<MyCard, LeftRight>(
+    limit: 5,                              // Max undoable cards
+    replacementStrategy: .clearTombstones, // How to handle filter changes
+    restoreOnLaunch: .clearGracefully,     // Persistence behavior
+    persistenceKey: "MyApp.UndoHistory",   // UserDefaults key
+    onEviction: { card, direction in
+        // Called when card exits undo window
+        // Perfect for backend deletion
+        try await deleteFromBackend(card)
+    }
+)
+
+let viewModel = CardStackViewModel(
+    dataSource: dataSource,
+    undoConfiguration: undoConfig
+)
+```
+
+#### Replacement Strategies
+When the card collection is replaced (e.g., filter changes):
+- `.clearTombstones` - Clear undo history (default, safest)
+- `.preserveValidTombstones` - Keep cards that exist in new collection
+- `.blockIfTombstones` - Prevent replacement if undo history exists
+- `.askUser` - Show confirmation dialog
+
+#### Restore on Launch Strategies
+Control how undo history behaves after app restart:
+- `.restore` - Keep undo history across app restarts
+- `.clearGracefully` - Restore tombstones but immediately evict them (triggers backend deletion)
+- `.ignore` - Start fresh, don't restore history
+
 ### Configuration Options
 
 ```swift
@@ -178,7 +282,6 @@ let configuration = CardStackConfiguration(
     cardOffset: 10,            // Vertical offset between stacked cards
     cardScale: 0.1,            // Scale factor for cards in stack
     animationDuration: 0.3,    // Animation duration in seconds
-    enableUndo: true,          // Enable undo functionality
     preloadThreshold: 3        // When to trigger loading more cards
 )
 ```

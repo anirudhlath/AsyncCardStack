@@ -2,7 +2,7 @@
 //  ExampleApp.swift
 //  AsyncCardStack Example
 //
-//  Created by Software Architect on 2025-08-23.
+//  Created by Anirudh Lath on 2025-08-23.
 //
 
 import SwiftUI
