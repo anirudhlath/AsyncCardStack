@@ -64,9 +64,10 @@ struct CardView<Element: CardElement, Direction: SwipeDirection, Content: View>:
         .opacity(cardOpacity)
         .simultaneousGesture(isOnTop ? dragGesture(geometry) : nil)
         .animation(
-          draggingState == .dragging ? .easeInOut(duration: 0.05) : .default,
+          draggingState == .dragging ? .interactiveSpring(response: 0.3, dampingFraction: 0.8) : configuration.animationStyle.animation,
           value: translation
         )
+        .animation(configuration.animationStyle.animation, value: offset)
         .onChange(of: isDragging) { newValue in
           if !newValue && draggingState == .dragging {
             cancelDragging()
@@ -133,14 +134,16 @@ struct CardView<Element: CardElement, Direction: SwipeDirection, Content: View>:
       .onEnded { value in
         self.draggingState = .ended
         if let direction = ongoingSwipeDirection(geometry) {
-          withAnimation(.default) {
+          withAnimation(configuration.animationStyle.animation) {
             translation = .zero
-            Task {
-              await onSwipe(direction)
-            }
+          }
+          Task {
+            await onSwipe(direction)
           }
         } else {
-          cancelDragging()
+          withAnimation(configuration.animationStyle.animation) {
+            cancelDragging()
+          }
         }
       }
   }

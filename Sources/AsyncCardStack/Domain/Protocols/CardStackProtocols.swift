@@ -72,6 +72,34 @@ public struct SwipeAction<Element: CardElement, Direction: SwipeDirection>: Send
 
 // MARK: - Configuration
 
+/// Animation style for card stack
+public enum CardStackAnimationStyle: String, Sendable {
+  case smooth
+  case easeInOut
+  case easeIn
+  case easeOut
+  case linear
+  case spring
+  
+  /// Convert to SwiftUI Animation
+  public var animation: Animation {
+    switch self {
+    case .smooth:
+      return .smooth
+    case .easeInOut:
+      return .easeInOut(duration: 0.3)
+    case .easeIn:
+      return .easeIn(duration: 0.3)
+    case .easeOut:
+      return .easeOut(duration: 0.3)
+    case .linear:
+      return .linear(duration: 0.3)
+    case .spring:
+      return .spring()
+    }
+  }
+}
+
 /// Configuration for the card stack appearance and behavior
 public struct CardStackConfiguration: Sendable {
   public let maxVisibleCards: Int
@@ -79,6 +107,7 @@ public struct CardStackConfiguration: Sendable {
   public let cardOffset: CGFloat
   public let cardScale: CGFloat
   public let animationDuration: Double
+  public let animationStyle: CardStackAnimationStyle
   public let enableUndo: Bool
   public let preloadThreshold: Int
   
@@ -88,6 +117,7 @@ public struct CardStackConfiguration: Sendable {
     cardOffset: CGFloat = 10,
     cardScale: CGFloat = 0.1,
     animationDuration: Double = 0.3,
+    animationStyle: CardStackAnimationStyle = .smooth,
     enableUndo: Bool = true,
     preloadThreshold: Int = 3
   ) {
@@ -96,6 +126,7 @@ public struct CardStackConfiguration: Sendable {
     self.cardOffset = cardOffset
     self.cardScale = cardScale
     self.animationDuration = animationDuration
+    self.animationStyle = animationStyle
     self.enableUndo = enableUndo
     self.preloadThreshold = preloadThreshold
   }
