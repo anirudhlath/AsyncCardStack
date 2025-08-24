@@ -167,16 +167,22 @@ public final class CardStackState<Element: CardElement, Direction: SwipeDirectio
   
   /// Remove cards by IDs
   public func removeCards(ids: Set<Element.ID>) {
-    // Remove from tracking but keep in order for position stability
+    // Remove from tracking
     for id in ids {
       cardsById.removeValue(forKey: id)
     }
     
-    // Clean up order if cards are not in tombstones
-    let tombstoneIds = Set(tombstones.map { $0.id })
-    cardOrder.removeAll { ids.contains($0) && !tombstoneIds.contains($0) }
+    // Always remove from cardOrder to ensure UI updates
+    // This is important when cards are removed from Firebase after swipe
+    cardOrder.removeAll { ids.contains($0) }
     
     // Adjust position if needed
+    // If current position is beyond the array, reset it
+    if currentPosition >= cardOrder.count && !cardOrder.isEmpty {
+      currentPosition = max(0, cardOrder.count - 1)
+    }
+    
+    // Skip over any missing cards
     while currentPosition < cardOrder.count && cardsById[cardOrder[currentPosition]] == nil {
       currentPosition += 1
     }

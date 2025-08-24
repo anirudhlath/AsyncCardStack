@@ -49,27 +49,40 @@ public final class CardStackViewModel<Element: CardElement, Direction: SwipeDire
   
   /// Start listening to card updates
   public func startListening() {
+    print("🚀 CardStackViewModel: startListening() called")
     updateTask?.cancel()
     
     updateTask = Task { [weak self] in
-      guard let self = self else { return }
+      guard let self = self else { 
+        print("🔴 CardStackViewModel: self is nil in Task")
+        return 
+      }
       
       do {
+        print("🚀 CardStackViewModel: Restoring tombstones...")
         // Restore tombstones if configured
         await state.restoreTombstones()
         
+        print("🚀 CardStackViewModel: Loading initial cards...")
         // Load initial cards
         state.setLoading(true)
         let initialCards = try await dataSource.loadInitialCards()
+        print("🚀 CardStackViewModel: Loaded \(initialCards.count) initial cards")
         await state.setCards(initialCards)
         state.setLoading(false)
         
+        print("🚀 CardStackViewModel: Setting up card stream...")
         // Listen to updates
         for await update in try await dataSource.cardStream {
-          guard !Task.isCancelled else { break }
+          guard !Task.isCancelled else { 
+            print("🟡 CardStackViewModel: Task cancelled, breaking stream loop")
+            break 
+          }
+          print("🚀 CardStackViewModel: Received update from stream")
           await self.handleUpdate(update)
         }
       } catch {
+        print("🔴 CardStackViewModel: Error in startListening: \(error)")
         state.setError(error)
       }
     }
