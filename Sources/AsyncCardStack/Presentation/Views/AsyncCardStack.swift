@@ -36,6 +36,10 @@ public struct AsyncCardStack<Element: CardElement, Direction: SwipeDirection, Da
   // MARK: - Body
   
   public var body: some View {
+    let _ = print("🌟 AsyncCardStack.body: Recomputing view")
+    let _ = print("🌟 AsyncCardStack.body: viewModel.state.cards.count = \(viewModel.state.cards.count)")
+    let _ = print("🌟 AsyncCardStack.body: viewModel.state.visibleCards.count = \(viewModel.state.visibleCards.count)")
+    
     ZStack {
       if viewModel.state.cards.isEmpty {
         emptyStateView
@@ -60,24 +64,41 @@ public struct AsyncCardStack<Element: CardElement, Direction: SwipeDirection, Da
   private var cardStackView: some View {
     GeometryReader { geometry in
       ZStack {
-        ForEach(Array(viewModel.state.visibleCards.enumerated()), id: \.element.id) { index, card in
-          CardView(
+        // Render cards in reverse order (bottom cards first)
+        ForEach(Array(viewModel.state.visibleCards.enumerated().reversed()), id: \.element.id) { index, card in
+          makeCardView(
             card: card,
-            isOnTop: index == 0,
-            stackIndex: index,
-            offset: offset(for: getSwipeDirection(for: card), in: geometry),
-            onSwipe: { direction in
-              await viewModel.swipe(direction: direction)
-              ongoingDirection = nil
-            },
-            content: { element, direction in
-              content(element, direction ?? ongoingDirection)
-            }
+            index: index,
+            geometry: geometry
           )
-          .zIndex(Double(viewModel.state.visibleCards.count - index))
         }
       }
     }
+  }
+  
+  @ViewBuilder
+  private func makeCardView(card: Element, index: Int, geometry: GeometryProxy) -> some View {
+    CardView(
+      card: card,
+      isOnTop: index == 0,
+      stackIndex: index,
+      offset: offset(for: getSwipeDirection(for: card), in: geometry),
+      onChange: { direction in
+        ongoingDirection = direction
+      },
+      onSwipe: { direction in
+        await viewModel.swipe(direction: direction)
+        ongoingDirection = nil
+      },
+      content: { element, direction in
+        content(element, direction ?? ongoingDirection)
+      }
+    )
+    .zIndex(Double(viewModel.state.visibleCards.count - index))
+    .transition(.asymmetric(
+      insertion: .opacity.combined(with: .scale(scale: 0.8)),
+      removal: .opacity.combined(with: .move(edge: .leading))
+    ))
   }
   
   private var emptyStateView: some View {
@@ -114,8 +135,8 @@ public struct AsyncCardStack<Element: CardElement, Direction: SwipeDirection, Da
   // MARK: - Helper Methods
   
   private func getSwipeDirection(for card: Element) -> Direction? {
-    // Swipe direction is tracked internally in CardView during drag
-    return nil
+    // Get the swipe direction from state for animation
+    return viewModel.state.getSwipeDirection(for: card.id)
   }
   
   private func offset(for direction: Direction?, in geometry: GeometryProxy) -> CGSize {

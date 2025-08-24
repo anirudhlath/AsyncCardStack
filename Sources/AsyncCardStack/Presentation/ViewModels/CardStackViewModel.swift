@@ -98,22 +98,38 @@ public final class CardStackViewModel<Element: CardElement, Direction: SwipeDire
   
   /// Swipe a card in the given direction
   public func swipe(direction: Direction) async {
+    print("🎯 CardStackViewModel.swipe: Starting swipe with direction: \(direction)")
+    print("🎯 CardStackViewModel.swipe: Current visibleCards count: \(state.visibleCards.count)")
+    print("🎯 CardStackViewModel.swipe: Current card: \(String(describing: state.currentCard?.id))")
+    
     // Use the new async swipe method
-    guard let card = await state.swipe(direction: direction) else { return }
+    guard let card = await state.swipe(direction: direction) else { 
+      print("🔴 CardStackViewModel.swipe: state.swipe returned nil")
+      return 
+    }
+    
+    print("🎯 CardStackViewModel.swipe: Successfully swiped card: \(String(describing: card.id))")
+    print("🎯 CardStackViewModel.swipe: After swipe - visibleCards count: \(state.visibleCards.count)")
     
     // Check if we should load more cards
     if state.shouldPreloadMore {
+      print("🎯 CardStackViewModel.swipe: Loading more cards (shouldPreloadMore = true)")
       await loadMoreCardsIfNeeded()
     }
     
     // Report swipe to data source
     do {
+      print("🎯 CardStackViewModel.swipe: Reporting swipe to dataSource")
       try await dataSource.reportSwipe(card: card, direction: direction)
+      print("✅ CardStackViewModel.swipe: Successfully reported swipe to dataSource")
     } catch {
+      print("🔴 CardStackViewModel.swipe: Failed to report swipe: \(error)")
       // If reporting fails, optionally undo the swipe
       _ = await state.undo()
       state.setError(error)
     }
+    
+    print("🎯 CardStackViewModel.swipe: Swipe complete - final visibleCards count: \(state.visibleCards.count)")
   }
   
   /// Undo the last swipe
@@ -138,25 +154,37 @@ public final class CardStackViewModel<Element: CardElement, Direction: SwipeDire
   // MARK: - Private Methods
   
   private func handleUpdate(_ update: CardUpdate<Element>) async {
+    print("📦 CardStackViewModel.handleUpdate: Received update")
+    
     switch update {
     case .initial(let cards):
+      print("📦 CardStackViewModel.handleUpdate: .initial with \(cards.count) cards")
       await state.setCards(cards)
       
     case .append(let cards):
+      print("📦 CardStackViewModel.handleUpdate: .append with \(cards.count) cards")
       state.appendCards(cards)
       
     case .replace(let cards):
+      print("📦 CardStackViewModel.handleUpdate: .replace with \(cards.count) cards")
       await state.setCards(cards)
       
     case .remove(let ids):
+      print("📦 CardStackViewModel.handleUpdate: .remove with \(ids.count) card IDs")
+      print("📦 CardStackViewModel.handleUpdate: IDs to remove: \(ids)")
       state.removeCards(ids: ids)
+      print("📦 CardStackViewModel.handleUpdate: After removal - visibleCards: \(state.visibleCards.count)")
       
     case .clear:
+      print("📦 CardStackViewModel.handleUpdate: .clear")
       await state.clearCards()
       
     case .update(let card):
+      print("📦 CardStackViewModel.handleUpdate: .update for card: \(card.id)")
       state.updateCard(card)
     }
+    
+    print("📦 CardStackViewModel.handleUpdate: Update complete - current visibleCards: \(state.visibleCards.count)")
   }
   
   private func loadMoreCardsIfNeeded() async {

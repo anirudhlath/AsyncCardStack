@@ -24,8 +24,27 @@ struct CardView<Element: CardElement, Direction: SwipeDirection, Content: View>:
   let isOnTop: Bool
   let stackIndex: Int
   let offset: CGSize
+  let onChange: ((Direction?) -> Void)?
   let onSwipe: (Direction) async -> Void
   let content: (Element, Direction?) -> Content
+  
+  init(
+    card: Element,
+    isOnTop: Bool,
+    stackIndex: Int,
+    offset: CGSize,
+    onChange: ((Direction?) -> Void)? = nil,
+    onSwipe: @escaping (Direction) async -> Void,
+    content: @escaping (Element, Direction?) -> Content
+  ) {
+    self.card = card
+    self.isOnTop = isOnTop
+    self.stackIndex = stackIndex
+    self.offset = offset
+    self.onChange = onChange
+    self.onSwipe = onSwipe
+    self.content = content
+  }
   
   private enum DraggingState {
     case idle
@@ -107,6 +126,12 @@ struct CardView<Element: CardElement, Direction: SwipeDirection, Content: View>:
       .onChanged { value in
         draggingState = .dragging
         translation = value.translation
+        // Notify about ongoing direction change
+        if let direction = ongoingSwipeDirection(geometry) {
+          onChange?(direction)
+        } else {
+          onChange?(nil)
+        }
       }
       .onEnded { value in
         draggingState = .ended

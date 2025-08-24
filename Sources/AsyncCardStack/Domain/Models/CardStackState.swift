@@ -43,6 +43,9 @@ public final class CardStackState<Element: CardElement, Direction: SwipeDirectio
   /// Tombstones for undo functionality
   private var tombstones: [Tombstone<Element, Direction>] = []
   
+  /// Track swipe directions for animation
+  private var swipedCards: [Element.ID: Direction] = [:]
+  
   // MARK: - Configuration
   
   private let configuration: CardStackConfiguration
@@ -167,6 +170,9 @@ public final class CardStackState<Element: CardElement, Direction: SwipeDirectio
   
   /// Remove cards by IDs
   public func removeCards(ids: Set<Element.ID>) {
+    print("🔥 CardStackState.removeCards: Removing \(ids.count) cards")
+    print("🔥 CardStackState.removeCards: Before - cardOrder.count = \(cardOrder.count), currentPosition = \(currentPosition)")
+    
     // Remove from tracking
     for id in ids {
       cardsById.removeValue(forKey: id)
@@ -176,16 +182,25 @@ public final class CardStackState<Element: CardElement, Direction: SwipeDirectio
     // This is important when cards are removed from Firebase after swipe
     cardOrder.removeAll { ids.contains($0) }
     
+    print("🔥 CardStackState.removeCards: After removal - cardOrder.count = \(cardOrder.count)")
+    
     // Adjust position if needed
     // If current position is beyond the array, reset it
     if currentPosition >= cardOrder.count && !cardOrder.isEmpty {
       currentPosition = max(0, cardOrder.count - 1)
+      print("🔥 CardStackState.removeCards: Adjusted currentPosition to \(currentPosition)")
     }
     
     // Skip over any missing cards
     while currentPosition < cardOrder.count && cardsById[cardOrder[currentPosition]] == nil {
       currentPosition += 1
+      print("🔥 CardStackState.removeCards: Skipped missing card, currentPosition now \(currentPosition)")
     }
+    
+    print("🔥 CardStackState.removeCards: Final - visibleCards.count = \(visibleCards.count)")
+    
+    // Force UI update by triggering objectWillChange
+    objectWillChange.send()
   }
   
   /// Clear all cards
@@ -201,10 +216,25 @@ public final class CardStackState<Element: CardElement, Direction: SwipeDirectio
   
   /// Process a swipe action with tombstone management
   public func swipe(direction: Direction) async -> Element? {
-    guard currentPosition < cardOrder.count else { return nil }
+    print("🎨 CardStackState.swipe: Starting swipe")
+    print("🎨 CardStackState.swipe: currentPosition = \(currentPosition), cardOrder.count = \(cardOrder.count)")
+    print("🎨 CardStackState.swipe: visibleCards before swipe = \(visibleCards.count)")
+    
+    guard currentPosition < cardOrder.count else { 
+      print("🔴 CardStackState.swipe: currentPosition >= cardOrder.count, returning nil")
+      return nil 
+    }
     
     let cardId = cardOrder[currentPosition]
-    guard let card = cardsById[cardId] else { return nil }
+    guard let card = cardsById[cardId] else { 
+      print("🔴 CardStackState.swipe: Card not found in cardsById for id: \(cardId)")
+      return nil 
+    }
+    
+    // Store the swipe direction for animation
+    swipedCards[cardId] = direction
+    
+    print("🎨 CardStackState.swipe: Swiping card: \(String(describing: cardId)) with direction: \(direction)")
     
     // Handle undo configuration
     if let undoConfig = undoConfiguration {
@@ -236,11 +266,19 @@ public final class CardStackState<Element: CardElement, Direction: SwipeDirectio
     
     // Move position forward
     currentPosition += 1
+    print("🎨 CardStackState.swipe: Moved currentPosition to \(currentPosition)")
     
     // Skip over any missing cards
     while currentPosition < cardOrder.count && cardsById[cardOrder[currentPosition]] == nil {
       currentPosition += 1
+      print("🎨 CardStackState.swipe: Skipped missing card, currentPosition now \(currentPosition)")
     }
+    
+    print("🎨 CardStackState.swipe: After swipe - visibleCards = \(visibleCards.count)")
+    print("🎨 CardStackState.swipe: After swipe - currentCard = \(String(describing: currentCard?.id))")
+    
+    // Force UI update by triggering objectWillChange
+    objectWillChange.send()
     
     return card
   }
@@ -348,6 +386,11 @@ public final class CardStackState<Element: CardElement, Direction: SwipeDirectio
   /// Check if a specific card is in tombstones
   public func isInTombstones(_ cardId: Element.ID) -> Bool {
     tombstones.contains { $0.id == cardId }
+  }
+  
+  /// Get the swipe direction for a card (used for animation)
+  public func getSwipeDirection(for cardId: Element.ID) -> Direction? {
+    swipedCards[cardId]
   }
   
   // MARK: - Persistence
