@@ -2,6 +2,8 @@
 
 A modern, flexible SwiftUI card stack library built with Swift concurrency (async/await) and clean architecture principles. This library provides a highly customizable card swiping interface that automatically updates based on data changes.
 
+Inspired by [SwiftUI-CardStackView](https://github.com/dadalar/SwiftUI-CardStackView), rewritten from scratch with Swift async/await.
+
 ## Features
 
 - ✨ **Swift Concurrency**: Built entirely with async/await, AsyncStream, and continuations (no Combine)
@@ -165,7 +167,7 @@ let undoConfig = UndoConfiguration<MyCard, LeftRight>(
     limit: 5,
     replacementStrategy: .clearTombstones,
     restoreOnLaunch: .clearGracefully,  // Ensures cleanup on restart
-    persistenceKey: "Reler.UndoHistory",
+    persistenceKey: "MyApp.UndoHistory",
     onEviction: { card, direction in
         // Delete from Firebase when card exits undo window
         try await Firestore.firestore()
@@ -339,6 +341,17 @@ The library follows clean architecture principles:
 - iOS 15.0+ / macOS 12.0+ / tvOS 15.0+ / watchOS 8.0+
 - Xcode 14.0+
 - Swift 5.9+
+
+## Building and Testing
+
+```bash
+swift build   # Build the library
+swift test    # Run the test suite
+```
+
+Or open `Package.swift` in Xcode and build with Cmd+B. If Xcode fails to resolve the package, try File → Packages → Reset Package Caches, then clean (Cmd+Shift+K) and rebuild.
+
+Note: the library currently emits some Swift 6 concurrency warnings related to `Sendable` conformance. These are warnings only and do not affect functionality.
 
 ## License
 
